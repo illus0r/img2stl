@@ -53,8 +53,8 @@ const MeshSettingsPanel = () => {
         Настройки сетки
       </Typography>
 
-      <Box sx={{ mt: 2 }}>
-        <Typography gutterBottom>
+      <Box sx={{ mt: 1 }}>
+        <Typography variant="body2" gutterBottom>
           Разрешение: {meshSettings.resolution}
         </Typography>
         <Slider
@@ -63,49 +63,49 @@ const MeshSettingsPanel = () => {
           min={10}
           max={1024}
           step={1}
-          valueLabelDisplay="auto"
+          size="small"
         />
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mt: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, mt: 1 }}>
         <TextField
-          label="Высота экструзии (мм)"
+          label="Экструзия"
           type="number"
           size="small"
-          value={meshSettings.extrusionHeight}
+          value={meshSettings.extrusionHeight.toFixed(2)}
           onChange={handleExtrusionHeightChange}
-          inputProps={{ min: 0, step: 0.1 }}
+          inputProps={{ min: 0, step: 0.01 }}
         />
         <TextField
-          label="Высота основания (мм)"
+          label="Основание"
           type="number"
           size="small"
-          value={meshSettings.baseHeight}
+          value={meshSettings.baseHeight.toFixed(2)}
           onChange={handleBaseHeightChange}
-          inputProps={{ min: 0, step: 0.1 }}
+          inputProps={{ min: 0, step: 0.01 }}
         />
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mt: 1 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, mt: 0.5 }}>
         <TextField
-          label="Ширина (мм)"
+          label="Ширина"
           type="number"
           size="small"
-          value={meshSettings.width}
+          value={meshSettings.width.toFixed(2)}
           onChange={handleWidthChange}
-          inputProps={{ min: 0, step: 0.1 }}
+          inputProps={{ min: 0, step: 0.01 }}
         />
         <TextField
-          label="Высота (мм)"
+          label="Высота"
           type="number"
           size="small"
-          value={meshSettings.height}
+          value={meshSettings.height.toFixed(2)}
           onChange={handleHeightChange}
-          inputProps={{ min: 0, step: 0.1 }}
+          inputProps={{ min: 0, step: 0.01 }}
         />
       </Box>
 
-      <Divider sx={{ my: 2 }} />
+      <Divider sx={{ my: 1 }} />
 
       <Button
         variant="contained"

@@ -2,7 +2,6 @@ import { Box, Divider } from '@mui/material';
 import ImageUpload from './ImageUpload';
 import ImageSettingsPanel from './ImageSettings';
 import MeshSettingsPanel from './MeshSettings';
-import ImagePreview from '../RightPanel/ImagePreview';
 
 const LeftPanel = () => {
   return (
@@ -16,10 +15,6 @@ const LeftPanel = () => {
       <Divider />
       
       <MeshSettingsPanel />
-      
-      <Divider />
-      
-      <ImagePreview />
     </Box>
   );
 };

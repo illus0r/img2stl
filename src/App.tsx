@@ -3,6 +3,7 @@ import { AppProvider } from './store/AppContext';
 import { useImageProcessing } from './hooks/useImageProcessing';
 import LeftPanel from './components/LeftPanel/LeftPanel';
 import Viewer3D from './components/Viewer3D/Viewer3D';
+import ImagePreview from './components/RightPanel/ImagePreview';
 
 const theme = createTheme({
   palette: {
@@ -38,6 +39,24 @@ function AppContent() {
             <Grid item xs={12} md={9} sx={{ height: '100%' }}>
               <Box sx={{ height: '100%', position: 'relative' }}>
                 <Viewer3D />
+                
+                {/* Preview обработанного изображения поверх 3D viewer */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 16,
+                    right: 16,
+                    width: 300,
+                    maxHeight: '50%',
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                    borderRadius: 1,
+                    boxShadow: 3,
+                    p: 2,
+                    overflow: 'auto',
+                  }}
+                >
+                  <ImagePreview />
+                </Box>
               </Box>
             </Grid>
           </Grid>

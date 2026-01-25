@@ -29,7 +29,7 @@ export const DEFAULT_IMAGE_SETTINGS: ImageSettings = {
 export const DEFAULT_MESH_SETTINGS: MeshSettings = {
   resolution: 100,
   extrusionHeight: 4,
-  baseHeight: 2,
+  baseHeight: 5,
   width: 50,
   height: 50,
 };

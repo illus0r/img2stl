@@ -3,13 +3,20 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Box, Typography } from '@mui/material';
 import StampMesh from './StampMesh';
+import { useAppContext } from '../../store/useAppContext';
 
 const Viewer3D = () => {
+  const { meshSettings } = useAppContext();
+  
+  // Вычисляем центр модели по Z (середина высоты штампа)
+  const centerZ = meshSettings.baseHeight + (meshSettings.extrusionHeight / 2);
+  const cameraDistance = Math.max(meshSettings.width, meshSettings.height) * 1.5;
+  
   return (
     <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
         camera={{ 
-          position: [100, 100, 100],
+          position: [cameraDistance, cameraDistance, cameraDistance],
           fov: 50,
           up: [0, 0, 1] // Z вверх
         }}
@@ -24,7 +31,7 @@ const Viewer3D = () => {
         <StampMesh />
         
         {/* Контролы для вращения и масштабирования */}
-        <OrbitControls enableDamping={false} target={[0, 0, 25]} />
+        <OrbitControls enableDamping={false} target={[0, 0, centerZ]} />
       </Canvas>
       
       {/* Временная метка */}
