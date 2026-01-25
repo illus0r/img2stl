@@ -13,6 +13,7 @@ interface AppState {
   // Загруженное изображение
   sourceImage: string | null; // Data URL
   sourceImageFile: File | null;
+  sourceImageData: ImageData | null; // Исходное изображение для vertex colors
   imageAspectRatio: number; // width / height
   
   // Обработанное изображение
@@ -37,6 +38,7 @@ export const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [sourceImage, setSourceImageState] = useState<string | null>(null);
   const [sourceImageFile, setSourceImageFile] = useState<File | null>(null);
+  const [sourceImageData, setSourceImageData] = useState<ImageData | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number>(1);
   const [processedImageData, setProcessedImageData] = useState<ImageData | null>(null);
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
@@ -46,7 +48,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setSourceImageFile(file);
     setSourceImageState(dataUrl);
     
-    // Загружаем изображение чтобы получить aspect ratio
+    // Загружаем изображение чтобы получить aspect ratio и ImageData
     const img = new Image();
     img.onload = () => {
       const aspectRatio = img.width / img.height;
@@ -57,9 +59,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ...prev,
         height: prev.width / aspectRatio
       }));
+      
+      // Создаём ImageData для vertex colors
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, img.width, img.height);
+        setSourceImageData(imgData);
+      }
     };
     img.src = dataUrl;
   }, []);
+
+
 
   const updateImageSettings = useCallback((settings: Partial<ImageSettings>) => {
     setImageSettings((prev) => ({ ...prev, ...settings }));
@@ -77,6 +92,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value: AppContextType = {
     sourceImage,
     sourceImageFile,
+    sourceImageData,
     imageAspectRatio,
     processedImageData,
     imageSettings,

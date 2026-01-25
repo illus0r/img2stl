@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react';
 import { useAppContext } from '../../store/useAppContext';
 import { generateStampGeometry } from '../../utils/meshGenerator';
+import { generateOutlineGeometry } from '../../utils/outlineGenerator';
 import type * as THREE from 'three';
 
 const StampMesh = () => {
-  const { processedImageData, meshSettings } = useAppContext();
+  const { processedImageData, sourceImageData, meshSettings } = useAppContext();
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
 
   useEffect(() => {
@@ -15,7 +16,17 @@ const StampMesh = () => {
     }
 
     try {
-      const newGeometry = generateStampGeometry(processedImageData, meshSettings);
+      // Выбираем генератор в зависимости от настройки useOutline
+      const newGeometry = meshSettings.useOutline
+        ? generateOutlineGeometry(
+            processedImageData,
+            sourceImageData,
+            meshSettings,
+            meshSettings.outlineThreshold,
+            meshSettings.outlineOffset
+          )
+        : generateStampGeometry(processedImageData, sourceImageData, meshSettings);
+      
       setGeometry(newGeometry);
       
       // Cleanup старой геометрии
@@ -26,7 +37,7 @@ const StampMesh = () => {
       console.error('Ошибка генерации геометрии:', error);
       setGeometry(null);
     }
-  }, [processedImageData, meshSettings]);
+  }, [processedImageData, sourceImageData, meshSettings]);
 
   if (!geometry) {
     return null;
@@ -34,7 +45,7 @@ const StampMesh = () => {
 
   return (
     <mesh geometry={geometry}>
-      <meshStandardMaterial color="#999999" />
+      <meshStandardMaterial vertexColors />
     </mesh>
   );
 };

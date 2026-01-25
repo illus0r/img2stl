@@ -3,9 +3,13 @@ import type { MeshSettings } from '../types';
 
 /**
  * Генерирует 3D геометрию штампа из обработанного изображения
+ * @param imageData - обработанное изображение (grayscale для высоты)
+ * @param sourceImageData - исходное изображение (RGB для цветов)
+ * @param settings - настройки сетки
  */
 export function generateStampGeometry(
   imageData: ImageData,
+  sourceImageData: ImageData | null,
   settings: MeshSettings
 ): THREE.BufferGeometry {
   const { width: imgWidth, height: imgHeight } = imageData;
@@ -38,8 +42,9 @@ export function generateStampGeometry(
   const meshWidth = settings.width;
   const meshHeight = settings.height;
 
-  // Генерируем верхнюю поверхность (рельеф)
+  // Генерируем верхнюю поверхность (рельеф) с vertex colors
   const vertexMap: number[][] = [];
+  const colors: number[] = [];
   
   for (let y = 0; y <= segmentsY; y++) {
     vertexMap[y] = [];
@@ -59,6 +64,20 @@ export function generateStampGeometry(
       
       vertexMap[y][x] = vertices.length / 3;
       vertices.push(px, py, pz);
+      
+      // Добавляем vertex color из исходного изображения
+      if (sourceImageData) {
+        const srcImgX = Math.floor((x / segmentsX) * (sourceImageData.width - 1));
+        const srcImgY = Math.floor((y / segmentsY) * (sourceImageData.height - 1));
+        const srcPixelIndex = (srcImgY * sourceImageData.width + srcImgX) * 4;
+        const r = sourceImageData.data[srcPixelIndex] / 255;
+        const g = sourceImageData.data[srcPixelIndex + 1] / 255;
+        const b = sourceImageData.data[srcPixelIndex + 2] / 255;
+        colors.push(r, g, b);
+      } else {
+        // Если нет исходного изображения - используем grayscale
+        colors.push(grayscale, grayscale, grayscale);
+      }
     }
   }
 
@@ -86,6 +105,9 @@ export function generateStampGeometry(
       const pz = 0; // Плоское дно
       
       vertices.push(px, py, pz);
+      
+      // Цвет для дна - темно-серый
+      colors.push(0.3, 0.3, 0.3);
     }
   }
 
@@ -148,9 +170,17 @@ export function generateStampGeometry(
     indices.push(topB, bottomB, bottomA);
   }
 
+  // Добавляем цвета для боковых стенок
+  // Левая стенка
+  for (let y = 0; y < segmentsY; y++) {
+    // Цвета уже добавлены для верхних вершин, для нижних добавим темно-серый
+    // (они уже есть в массиве colors)
+  }
+  
   // Создаём BufferGeometry
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   
   // Вычисляем нормали для корректного освещения

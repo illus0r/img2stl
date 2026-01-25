@@ -1,13 +1,14 @@
 import { useCallback } from 'react';
 import { useAppContext } from '../store/useAppContext';
 import { generateStampGeometry } from '../utils/meshGenerator';
+import { generateOutlineGeometry } from '../utils/outlineGenerator';
 import { exportToSTL, generateSTLFilename } from '../utils/stlExporter';
 
 /**
  * Хук для экспорта 3D модели в STL формат
  */
 export const useSTLExport = () => {
-  const { processedImageData, meshSettings } = useAppContext();
+  const { processedImageData, sourceImageData, meshSettings } = useAppContext();
 
   const exportSTL = useCallback(() => {
     if (!processedImageData) {
@@ -16,8 +17,16 @@ export const useSTLExport = () => {
     }
 
     try {
-      // Генерируем геометрию
-      const geometry = generateStampGeometry(processedImageData, meshSettings);
+      // Генерируем геометрию (с учётом useOutline)
+      const geometry = meshSettings.useOutline
+        ? generateOutlineGeometry(
+            processedImageData,
+            sourceImageData,
+            meshSettings,
+            meshSettings.outlineThreshold,
+            meshSettings.outlineOffset
+          )
+        : generateStampGeometry(processedImageData, sourceImageData, meshSettings);
       
       // Экспортируем в STL
       const filename = generateSTLFilename();
@@ -31,7 +40,7 @@ export const useSTLExport = () => {
       console.error('Ошибка экспорта STL:', error);
       alert('Ошибка при экспорте STL файла');
     }
-  }, [processedImageData, meshSettings]);
+  }, [processedImageData, sourceImageData, meshSettings]);
 
   return { exportSTL, canExport: !!processedImageData };
 };

@@ -16,6 +16,9 @@ export interface MeshSettings {
   baseHeight: number; // мм
   width: number; // мм
   height: number; // мм (связано с width через aspect ratio)
+  useOutline: boolean; // Автоматический аутлайн по форме объекта
+  outlineThreshold: number; // Порог бинаризации для аутлайна (0-255)
+  outlineOffset: number; // Отступ от контура в пикселях
 }
 
 // Дефолтные значения
@@ -32,4 +35,7 @@ export const DEFAULT_MESH_SETTINGS: MeshSettings = {
   baseHeight: 5,
   width: 50,
   height: 50,
+  useOutline: false,
+  outlineThreshold: 127,
+  outlineOffset: 2,
 };
