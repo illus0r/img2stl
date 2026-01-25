@@ -49,7 +49,7 @@ const ImageSettingsPanel = () => {
           value={imageSettings.gaussianBlur}
           onChange={handleGaussianBlurChange}
           min={0}
-          max={20}
+          max={50}
           step={0.1}
           valueLabelDisplay="auto"
         />
@@ -63,7 +63,7 @@ const ImageSettingsPanel = () => {
           value={imageSettings.uniformBlur}
           onChange={handleUniformBlurChange}
           min={0}
-          max={20}
+          max={50}
           step={0.1}
           valueLabelDisplay="auto"
         />

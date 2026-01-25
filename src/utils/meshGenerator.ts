@@ -103,7 +103,7 @@ export function generateStampGeometry(
     }
   }
 
-  // Добавляем боковые стенки
+  // Добавляем боковые стенки (флипнутые нормали наружу)
   // Левая стенка (x = 0)
   for (let y = 0; y < segmentsY; y++) {
     const topA = vertexMap[y][0];
@@ -111,8 +111,8 @@ export function generateStampGeometry(
     const bottomA = bottomVertexStart + y * (segmentsX + 1);
     const bottomB = bottomVertexStart + (y + 1) * (segmentsX + 1);
     
-    indices.push(topA, bottomA, topB);
-    indices.push(topB, bottomA, bottomB);
+    indices.push(topA, topB, bottomA);
+    indices.push(topB, bottomB, bottomA);
   }
 
   // Правая стенка (x = segmentsX)
@@ -122,8 +122,8 @@ export function generateStampGeometry(
     const bottomA = bottomVertexStart + y * (segmentsX + 1) + segmentsX;
     const bottomB = bottomVertexStart + (y + 1) * (segmentsX + 1) + segmentsX;
     
-    indices.push(topA, topB, bottomA);
-    indices.push(topB, bottomB, bottomA);
+    indices.push(topA, bottomA, topB);
+    indices.push(topB, bottomA, bottomB);
   }
 
   // Передняя стенка (y = 0)
@@ -133,8 +133,8 @@ export function generateStampGeometry(
     const bottomA = bottomVertexStart + x;
     const bottomB = bottomVertexStart + x + 1;
     
-    indices.push(topA, topB, bottomA);
-    indices.push(topB, bottomB, bottomA);
+    indices.push(topA, bottomA, topB);
+    indices.push(topB, bottomA, bottomB);
   }
 
   // Задняя стенка (y = segmentsY)
@@ -144,8 +144,8 @@ export function generateStampGeometry(
     const bottomA = bottomVertexStart + segmentsY * (segmentsX + 1) + x;
     const bottomB = bottomVertexStart + segmentsY * (segmentsX + 1) + x + 1;
     
-    indices.push(topA, bottomA, topB);
-    indices.push(topB, bottomA, bottomB);
+    indices.push(topA, topB, bottomA);
+    indices.push(topB, bottomB, bottomA);
   }
 
   // Создаём BufferGeometry

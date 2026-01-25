@@ -1,4 +1,5 @@
 import type { ImageSettings } from '../types';
+import { applyGaussianBlurShader, applyUniformBlurShader } from './shaderBlur';
 
 /**
  * Обрабатывает изображение согласно настройкам
@@ -32,15 +33,16 @@ export async function processImage(
     imageData = invertImage(imageData);
   }
   
+  // Размытия через WebGL шейдеры
   if (settings.gaussianBlur > 0) {
-    imageData = applyGaussianBlur(imageData, settings.gaussianBlur);
+    imageData = applyGaussianBlurShader(imageData, settings.gaussianBlur);
   }
   
   if (settings.uniformBlur > 0) {
-    imageData = applyUniformBlur(imageData, settings.uniformBlur);
+    imageData = applyUniformBlurShader(imageData, settings.uniformBlur);
   }
   
-  // Применяем cubic bezier transfer function
+  // Применяем cubic bezier transfer function ПОСЛЕ размытий
   imageData = applyCubicBezier(imageData, settings.bezierCurve);
 
   return imageData;
@@ -97,77 +99,7 @@ function invertImage(imageData: ImageData): ImageData {
   return imageData;
 }
 
-/**
- * Применяет Gaussian blur (простая CPU версия для MVP)
- * TODO: заменить на WebGL shader для производительности
- */
-function applyGaussianBlur(imageData: ImageData, radius: number): ImageData {
-  if (radius <= 0) return imageData;
-  
-  const canvas = document.createElement('canvas');
-  canvas.width = imageData.width;
-  canvas.height = imageData.height;
-  const ctx = canvas.getContext('2d');
-  
-  if (!ctx) return imageData;
-  
-  ctx.putImageData(imageData, 0, 0);
-  
-  // Используем встроенный filter для Gaussian blur
-  // Это не идеально, но работает для MVP
-  ctx.filter = `blur(${radius}px)`;
-  ctx.drawImage(canvas, 0, 0);
-  ctx.filter = 'none';
-  
-  return ctx.getImageData(0, 0, canvas.width, canvas.height);
-}
 
-/**
- * Применяет uniform blur с круглой маской (box blur)
- * TODO: заменить на WebGL shader для производительности
- */
-function applyUniformBlur(imageData: ImageData, radius: number): ImageData {
-  if (radius <= 0) return imageData;
-  
-  const { width, height } = imageData;
-  const data = imageData.data;
-  const output = new Uint8ClampedArray(data.length);
-  const kernelRadius = Math.ceil(radius);
-  
-  // Box blur с круглой маской
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let r = 0, g = 0, b = 0, count = 0;
-      
-      for (let ky = -kernelRadius; ky <= kernelRadius; ky++) {
-        for (let kx = -kernelRadius; kx <= kernelRadius; kx++) {
-          // Проверяем что точка внутри круглой маски
-          const dist = Math.sqrt(kx * kx + ky * ky);
-          if (dist > radius) continue;
-          
-          const px = x + kx;
-          const py = y + ky;
-          
-          if (px >= 0 && px < width && py >= 0 && py < height) {
-            const i = (py * width + px) * 4;
-            r += data[i];
-            g += data[i + 1];
-            b += data[i + 2];
-            count++;
-          }
-        }
-      }
-      
-      const i = (y * width + x) * 4;
-      output[i] = r / count;
-      output[i + 1] = g / count;
-      output[i + 2] = b / count;
-      output[i + 3] = data[i + 3]; // Alpha
-    }
-  }
-  
-  return new ImageData(output, width, height);
-}
 
 /**
  * Применяет cubic bezier transfer function для преобразования яркости

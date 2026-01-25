@@ -2,7 +2,6 @@ import { Box, Grid, Paper, ThemeProvider, createTheme, CssBaseline } from '@mui/
 import { AppProvider } from './store/AppContext';
 import { useImageProcessing } from './hooks/useImageProcessing';
 import LeftPanel from './components/LeftPanel/LeftPanel';
-import RightPanel from './components/RightPanel/RightPanel';
 import Viewer3D from './components/Viewer3D/Viewer3D';
 
 const theme = createTheme({
@@ -18,7 +17,7 @@ function AppContent() {
   return (
     <Box sx={{ height: '100vh', width: '100vw', overflow: 'hidden', display: 'flex' }}>
           <Grid container spacing={1} sx={{ height: '100%', p: 1 }}>
-            {/* Левая панель - загрузка и настройки */}
+            {/* Левая панель - загрузка, настройки и превью */}
             <Grid item xs={12} md={3} sx={{ height: '100%', overflow: 'auto' }}>
               <Paper 
                 elevation={2} 
@@ -35,25 +34,11 @@ function AppContent() {
               </Paper>
             </Grid>
 
-            {/* Центральная область - 3D viewer */}
-            <Grid item xs={12} md={6} sx={{ height: '100%' }}>
+            {/* Центральная область - 3D viewer (расширена) */}
+            <Grid item xs={12} md={9} sx={{ height: '100%' }}>
               <Box sx={{ height: '100%', position: 'relative' }}>
                 <Viewer3D />
               </Box>
-            </Grid>
-
-            {/* Правая панель - превью обработанного изображения */}
-            <Grid item xs={12} md={3} sx={{ height: '100%', overflow: 'auto' }}>
-              <Paper 
-                elevation={2} 
-                sx={{ 
-                  p: 2, 
-                  height: '100%',
-                  overflow: 'auto'
-                }}
-              >
-                <RightPanel />
-              </Paper>
             </Grid>
           </Grid>
     </Box>
