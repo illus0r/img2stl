@@ -35,7 +35,7 @@ export const DEFAULT_MESH_SETTINGS: MeshSettings = {
   baseHeight: 5,
   width: 50,
   height: 50,
-  useOutline: false,
+  useOutline: true,
   outlineThreshold: 127,
   outlineOffset: 2,
 };
