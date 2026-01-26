@@ -3,7 +3,7 @@ import type { MeshSettings } from '../types';
 
 /**
  * Генерирует аутлайн по форме объекта на изображении
- * Использует решётку из вертикальных боксов
+ * Использует обрезанную сетку с краевыми рёбрами
  */
 export function generateOutlineGeometry(
   imageData: ImageData,
@@ -15,7 +15,7 @@ export function generateOutlineGeometry(
   const { width: imgWidth, height: imgHeight } = imageData;
   const { resolution, extrusionHeight, baseHeight } = settings;
 
-  console.log('=== OUTLINE GENERATOR (BOX GRID) DEBUG ===');
+  console.log('=== OUTLINE GENERATOR (CLIPPED GRID) DEBUG ===');
   console.log('Image size:', imgWidth, 'x', imgHeight);
   console.log('Threshold:', threshold);
   console.log('Offset:', offset);
@@ -23,29 +23,29 @@ export function generateOutlineGeometry(
 
   // Бинаризуем изображение по порогу
   const binaryMap = binarizeImage(imageData, threshold);
-  
+
   // Подсчитываем белые пиксели
   const whitePixels = binaryMap.filter(v => v).length;
-  console.log('White pixels after binarization:', whitePixels, '/', binaryMap.length, 
+  console.log('White pixels after binarization:', whitePixels, '/', binaryMap.length,
     '(' + (whitePixels / binaryMap.length * 100).toFixed(1) + '%)');
-  
+
   // Визуализируем бинарную карту
   visualizeBinaryMap(binaryMap, imgWidth, imgHeight, 'Binary Map');
-  
+
   // Применяем отступ (опционально)
-  const offsetBinaryMap = offset > 0 
+  const offsetBinaryMap = offset > 0
     ? applyOffset(binaryMap, imgWidth, imgHeight, offset)
     : binaryMap;
 
   if (offset > 0) {
     const whitePixelsAfterOffset = offsetBinaryMap.filter(v => v).length;
-    console.log('White pixels after offset:', whitePixelsAfterOffset, 
+    console.log('White pixels after offset:', whitePixelsAfterOffset,
       '(' + (whitePixelsAfterOffset / offsetBinaryMap.length * 100).toFixed(1) + '%)');
-    visualizeBinaryMap(offsetBinaryMap, imgWidth, imgHeight, 'After Offset');
+    // visualizeBinaryMap(offsetBinaryMap, imgWidth, imgHeight, 'After Offset');
   }
 
-  // Генерируем решётку из боксов
-  return generateBoxGridGeometry(
+  // Генерируем обрезанную сетку
+  return generateClippedGridGeometry(
     offsetBinaryMap,
     imageData,
     sourceImageData,
@@ -61,12 +61,12 @@ export function generateOutlineGeometry(
 function binarizeImage(imageData: ImageData, threshold: number): boolean[] {
   const { width, height, data } = imageData;
   const binary = new Array(width * height);
-  
+
   for (let i = 0; i < width * height; i++) {
     const grayscale = data[i * 4]; // Первый канал (grayscale)
     binary[i] = grayscale > threshold;
   }
-  
+
   return binary;
 }
 
@@ -81,7 +81,7 @@ function applyOffset(
 ): boolean[] {
   const result = new Array(width * height).fill(false);
   const offsetPixels = Math.round(offset);
-  
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (binaryMap[y * width + x]) {
@@ -100,15 +100,17 @@ function applyOffset(
       }
     }
   }
-  
+
   return result;
 }
 
 /**
- * Генерирует геометрию из решётки вертикальных боксов
- * Оставляет только боксы, которые касаются белых пикселей
+ * Генерирует геометрию из обрезанной сетки с краевыми рёбрами
+ * 1. Строим полную сетку как без аутлайна
+ * 2. Удаляем вершины за пределами маски
+ * 3. Для краевых вершин добавляем рёбра вниз до Z=0
  */
-function generateBoxGridGeometry(
+function generateClippedGridGeometry(
   binaryMap: boolean[],
   imageData: ImageData,
   sourceImageData: ImageData | null,
@@ -118,144 +120,295 @@ function generateBoxGridGeometry(
 ): THREE.BufferGeometry {
   const { resolution, extrusionHeight, baseHeight, width: meshWidth, height: meshHeight } = settings;
 
-  console.log('Generating box grid geometry...');
-  
-  // Определяем размер боксов в пикселях
+  console.log('Generating clipped grid geometry...');
+
+  // Определяем размер сетки
   const minDimension = Math.min(imgWidth, imgHeight);
-  const boxSizePixels = Math.max(1, Math.floor(minDimension / resolution));
-  
-  const boxesX = Math.ceil(imgWidth / boxSizePixels);
-  const boxesY = Math.ceil(imgHeight / boxSizePixels);
-  
-  console.log('Box size:', boxSizePixels, 'px');
-  console.log('Grid size:', boxesX, 'x', boxesY, '=', boxesX * boxesY, 'boxes');
-  
-  // Собираем боксы, которые касаются белых пикселей
-  const activeBoxes: Array<{ x: number; y: number }> = [];
-  
-  for (let by = 0; by < boxesY; by++) {
-    for (let bx = 0; bx < boxesX; bx++) {
-      // Проверяем хотя бы один угол бокса касается белого пикселя
-      const corners = [
-        [bx * boxSizePixels, by * boxSizePixels],
-        [(bx + 1) * boxSizePixels, by * boxSizePixels],
-        [bx * boxSizePixels, (by + 1) * boxSizePixels],
-        [(bx + 1) * boxSizePixels, (by + 1) * boxSizePixels],
-      ];
-      
-      let touchesWhite = false;
-      for (const [px, py] of corners) {
-        if (px < imgWidth && py < imgHeight) {
-          if (binaryMap[py * imgWidth + px]) {
-            touchesWhite = true;
-            break;
+  const aspectRatio = imgWidth / imgHeight;
+
+  let segmentsX: number;
+  let segmentsY: number;
+
+  if (imgWidth < imgHeight) {
+    segmentsX = Math.min(resolution, imgWidth);
+    segmentsY = Math.min(Math.round(resolution / aspectRatio), imgHeight);
+  } else {
+    segmentsY = Math.min(resolution, imgHeight);
+    segmentsX = Math.min(Math.round(resolution * aspectRatio), imgWidth);
+  }
+
+  segmentsX = Math.min(segmentsX, 1024);
+  segmentsY = Math.min(segmentsY, 1024);
+
+  console.log('Grid segments:', segmentsX, 'x', segmentsY);
+
+  // Создаём полную сетку с маской
+  const vertexMap: (number | null)[][] = [];
+  const vertices: number[] = [];
+  const colors: number[] = [];
+
+  for (let y = 0; y <= segmentsY; y++) {
+    vertexMap[y] = [];
+    for (let x = 0; x <= segmentsX; x++) {
+      // Проверяем клетку вокруг вершины (хотя бы один угол в белой области)
+      const imgX = (x / segmentsX) * (imgWidth - 1);
+      const imgY = (y / segmentsY) * (imgHeight - 1);
+
+      // Проверяем 4 клетки вокруг вершины (если они есть)
+      let shouldKeep = false;
+
+      for (let dy = -1; dy <= 0; dy++) {
+        for (let dx = -1; dx <= 0; dx++) {
+          const checkX = x + dx;
+          const checkY = y + dy;
+
+          if (checkX >= 0 && checkX < segmentsX && checkY >= 0 && checkY < segmentsY) {
+            // Проверяем 4 угла клетки
+            const corners = [
+              [checkX / segmentsX, checkY / segmentsY],
+              [(checkX + 1) / segmentsX, checkY / segmentsY],
+              [checkX / segmentsX, (checkY + 1) / segmentsY],
+              [(checkX + 1) / segmentsX, (checkY + 1) / segmentsY],
+            ];
+
+            for (const [fx, fy] of corners) {
+              const px = Math.floor(fx * (imgWidth - 1));
+              const py = Math.floor(fy * (imgHeight - 1));
+              if (binaryMap[py * imgWidth + px]) {
+                shouldKeep = true;
+                break;
+              }
+            }
+            if (shouldKeep) break;
           }
         }
+        if (shouldKeep) break;
       }
-      
-      if (touchesWhite) {
-        activeBoxes.push({ x: bx, y: by });
+
+      if (!shouldKeep) {
+        vertexMap[y][x] = null; // Вершина удалена
+        continue;
+      }
+
+      // Создаём вершину
+      const px = (x / segmentsX - 0.5) * meshWidth;
+      const py = (y / segmentsY - 0.5) * meshHeight;
+
+      // Сэмплируем heightmap
+      const sampleX = Math.floor(imgX);
+      const sampleY = Math.floor(imgY);
+      const pixelIndex = (sampleY * imgWidth + sampleX) * 4;
+      const grayscale = imageData.data[pixelIndex] / 255;
+
+      const pz = baseHeight + grayscale * extrusionHeight;
+
+      vertexMap[y][x] = vertices.length / 3;
+      vertices.push(px, py, pz);
+
+      // Vertex color
+      if (sourceImageData) {
+        const srcX = Math.floor((sampleX / imgWidth) * (sourceImageData.width - 1));
+        const srcY = Math.floor((sampleY / imgHeight) * (sourceImageData.height - 1));
+        const srcPixelIndex = (srcY * sourceImageData.width + srcX) * 4;
+        const r = sourceImageData.data[srcPixelIndex] / 255;
+        const g = sourceImageData.data[srcPixelIndex + 1] / 255;
+        const b = sourceImageData.data[srcPixelIndex + 2] / 255;
+        colors.push(r, g, b);
+      } else {
+        colors.push(grayscale, grayscale, grayscale);
       }
     }
   }
-  
-  console.log('Active boxes:', activeBoxes.length, '/', boxesX * boxesY, 
-    '(' + (activeBoxes.length / (boxesX * boxesY) * 100).toFixed(1) + '%)');
-  
-  if (activeBoxes.length === 0) {
-    console.warn('No active boxes! Falling back to rectangle');
-    return generateRectangularGeometry(imageData, sourceImageData, settings);
-  }
-  
-  // Визуализируем активные боксы
-  visualizeBoxGrid(binaryMap, imgWidth, imgHeight, activeBoxes, boxSizePixels, 'Box Grid');
-  
-  // Генерируем геометрию из боксов
-  const vertices: number[] = [];
+
+  console.log('Top surface vertices:', vertices.length / 3);
+
+  // Генерируем треугольники верхней поверхности
   const indices: number[] = [];
-  const colors: number[] = [];
-  
-  const boxWidthMm = meshWidth / boxesX;
-  const boxHeightMm = meshHeight / boxesY;
-  
-  for (const { x: bx, y: by } of activeBoxes) {
-    // Позиция бокса в мировых координатах (центрированно)
-    const worldX = (bx / boxesX - 0.5) * meshWidth + boxWidthMm / 2;
-    const worldY = (by / boxesY - 0.5) * meshHeight + boxHeightMm / 2;
-    
-    // Сэмплируем высоту из центра бокса
-    const centerPixelX = Math.floor(bx * boxSizePixels + boxSizePixels / 2);
-    const centerPixelY = Math.floor(by * boxSizePixels + boxSizePixels / 2);
-    const pixelIndex = (centerPixelY * imgWidth + centerPixelX) * 4;
-    const grayscale = imageData.data[pixelIndex] / 255;
-    
-    const topZ = baseHeight + grayscale * extrusionHeight;
-    const bottomZ = 0;
-    
-    // Цвет из исходного изображения
-    let r = grayscale, g = grayscale, b = grayscale;
-    if (sourceImageData) {
-      const srcX = Math.floor((centerPixelX / imgWidth) * (sourceImageData.width - 1));
-      const srcY = Math.floor((centerPixelY / imgHeight) * (sourceImageData.height - 1));
-      const srcPixelIndex = (srcY * sourceImageData.width + srcX) * 4;
-      r = sourceImageData.data[srcPixelIndex] / 255;
-      g = sourceImageData.data[srcPixelIndex + 1] / 255;
-      b = sourceImageData.data[srcPixelIndex + 2] / 255;
+
+  for (let y = 0; y < segmentsY; y++) {
+    for (let x = 0; x < segmentsX; x++) {
+      const v0 = vertexMap[y][x];
+      const v1 = vertexMap[y][x + 1];
+      const v2 = vertexMap[y + 1][x + 1];
+      const v3 = vertexMap[y + 1][x];
+
+      if (v0 !== null && v1 !== null && v2 !== null && v3 !== null) {
+        indices.push(v0, v1, v2);
+        indices.push(v0, v2, v3);
+      }
     }
-    
-    // Генерируем вертикальный бокс (8 вершин)
-    const halfW = boxWidthMm / 2;
-    const halfH = boxHeightMm / 2;
-    
-    const baseIndex = vertices.length / 3;
-    
-    // Верхние 4 вершины
-    vertices.push(worldX - halfW, worldY - halfH, topZ); colors.push(r, g, b); // 0
-    vertices.push(worldX + halfW, worldY - halfH, topZ); colors.push(r, g, b); // 1
-    vertices.push(worldX + halfW, worldY + halfH, topZ); colors.push(r, g, b); // 2
-    vertices.push(worldX - halfW, worldY + halfH, topZ); colors.push(r, g, b); // 3
-    
-    // Нижние 4 вершины
-    vertices.push(worldX - halfW, worldY - halfH, bottomZ); colors.push(0.3, 0.3, 0.3); // 4
-    vertices.push(worldX + halfW, worldY - halfH, bottomZ); colors.push(0.3, 0.3, 0.3); // 5
-    vertices.push(worldX + halfW, worldY + halfH, bottomZ); colors.push(0.3, 0.3, 0.3); // 6
-    vertices.push(worldX - halfW, worldY + halfH, bottomZ); colors.push(0.3, 0.3, 0.3); // 7
-    
-    // Верхняя грань (2 треугольника)
-    indices.push(baseIndex + 0, baseIndex + 1, baseIndex + 2);
-    indices.push(baseIndex + 0, baseIndex + 2, baseIndex + 3);
-    
-    // Нижняя грань (2 треугольника, обратный порядок)
-    indices.push(baseIndex + 4, baseIndex + 6, baseIndex + 5);
-    indices.push(baseIndex + 4, baseIndex + 7, baseIndex + 6);
-    
-    // 4 боковые грани (по 2 треугольника каждая)
-    // Передняя (Y-)
-    indices.push(baseIndex + 0, baseIndex + 4, baseIndex + 1);
-    indices.push(baseIndex + 1, baseIndex + 4, baseIndex + 5);
-    
-    // Правая (X+)
-    indices.push(baseIndex + 1, baseIndex + 5, baseIndex + 2);
-    indices.push(baseIndex + 2, baseIndex + 5, baseIndex + 6);
-    
-    // Задняя (Y+)
-    indices.push(baseIndex + 2, baseIndex + 6, baseIndex + 3);
-    indices.push(baseIndex + 3, baseIndex + 6, baseIndex + 7);
-    
-    // Левая (X-)
-    indices.push(baseIndex + 3, baseIndex + 7, baseIndex + 0);
-    indices.push(baseIndex + 0, baseIndex + 7, baseIndex + 4);
   }
-  
-  console.log('Generated', vertices.length / 3, 'vertices,', indices.length / 3, 'triangles');
-  console.log('=== BOX GRID GENERATOR FINISHED ===');
-  
+
+  console.log('Top surface triangles:', indices.length / 3);
+
+  // Находим краевые вершины и добавляем рёбра вниз
+  const edgeVertices: Array<{
+    topIndex: number;
+    x: number;
+    y: number;
+    missingEdges: { left: boolean; right: boolean; top: boolean; bottom: boolean; }
+  }> = [];
+
+  for (let y = 0; y <= segmentsY; y++) {
+    for (let x = 0; x <= segmentsX; x++) {
+      const vIndex = vertexMap[y][x];
+      if (vIndex === null) continue;
+
+      // Проверяем соседей
+      const hasLeft = x > 0 && vertexMap[y][x - 1] !== null;
+      const hasRight = x < segmentsX && vertexMap[y][x + 1] !== null;
+      const hasTop = y > 0 && vertexMap[y - 1][x] !== null;
+      const hasBottom = y < segmentsY && vertexMap[y + 1][x] !== null;
+
+      // Если хотя бы одного соседа нет - это край
+      if (!hasLeft || !hasRight || !hasTop || !hasBottom) {
+        edgeVertices.push({
+          topIndex: vIndex,
+          x,
+          y,
+          missingEdges: {
+            left: !hasLeft,
+            right: !hasRight,
+            top: !hasTop,
+            bottom: !hasBottom
+          }
+        });
+      }
+    }
+  }
+
+  console.log('Edge vertices:', edgeVertices.length);
+
+  // Добавляем нижние вершины для краёв
+  const bottomVertexStart = vertices.length / 3;
+
+  for (const { topIndex } of edgeVertices) {
+    const px = vertices[topIndex * 3];
+    const py = vertices[topIndex * 3 + 1];
+
+    vertices.push(px, py, 0);
+    colors.push(0.5, 0.5, 0.5); // Серый для боковых стенок
+  }
+
+  console.log('Bottom vertices:', edgeVertices.length);
+
+  // Генерируем боковые стенки для каждого крайнего ребра
+  // Для каждой краевой вершины создаем прямоугольники в направлениях отсутствующих соседей
+  let wallTriangles = 0;
+
+  for (let i = 0; i < edgeVertices.length; i++) {
+    const vertex = edgeVertices[i];
+    const topIdx = vertex.topIndex;
+    const bottomIdx = bottomVertexStart + i;
+
+    const segmentSizeX = meshWidth / segmentsX;
+    const segmentSizeY = meshHeight / segmentsY;
+
+    // Левая стенка
+    if (vertex.missingEdges.left) {
+      const leftTopIdx = vertices.length / 3;
+      const leftBottomIdx = leftTopIdx + 1;
+
+      // Добавляем две дополнительные вершины слева от текущей
+      const px = vertices[topIdx * 3] - segmentSizeX / 2;
+      const py = vertices[topIdx * 3 + 1];
+      const pzTop = vertices[topIdx * 3 + 2];
+
+      vertices.push(px, py, pzTop); // левая верхняя
+      colors.push(0.5, 0.5, 0.5);
+      vertices.push(px, py, 0);     // левая нижняя
+      colors.push(0.5, 0.5, 0.5);
+
+      // Прямоугольник из 2 треугольников (нормали наружу)
+      indices.push(topIdx, leftTopIdx, bottomIdx);
+      indices.push(leftTopIdx, leftBottomIdx, bottomIdx);
+      wallTriangles += 2;
+    }
+
+    // Правая стенка
+    if (vertex.missingEdges.right) {
+      const rightTopIdx = vertices.length / 3;
+      const rightBottomIdx = rightTopIdx + 1;
+
+      const px = vertices[topIdx * 3] + segmentSizeX / 2;
+      const py = vertices[topIdx * 3 + 1];
+      const pzTop = vertices[topIdx * 3 + 2];
+
+      vertices.push(px, py, pzTop); // правая верхняя
+      colors.push(0.5, 0.5, 0.5);
+      vertices.push(px, py, 0);     // правая нижняя
+      colors.push(0.5, 0.5, 0.5);
+
+      // Прямоугольник из 2 треугольников (нормали наружу)
+      indices.push(topIdx, bottomIdx, rightTopIdx);
+      indices.push(rightTopIdx, bottomIdx, rightBottomIdx);
+      wallTriangles += 2;
+    }
+
+    // Верхняя стенка
+    if (vertex.missingEdges.top) {
+      const topTopIdx = vertices.length / 3;
+      const topBottomIdx = topTopIdx + 1;
+
+      const px = vertices[topIdx * 3];
+      const py = vertices[topIdx * 3 + 1] + segmentSizeY / 2;
+      const pzTop = vertices[topIdx * 3 + 2];
+
+      vertices.push(px, py, pzTop); // верхняя верхняя
+      colors.push(0.5, 0.5, 0.5);
+      vertices.push(px, py, 0);     // верхняя нижняя
+      colors.push(0.5, 0.5, 0.5);
+
+      // Прямоугольник из 2 треугольников (нормали наружу)
+      indices.push(topIdx, bottomIdx, topTopIdx);
+      indices.push(topTopIdx, bottomIdx, topBottomIdx);
+      wallTriangles += 2;
+    }
+
+    // Нижняя стенка
+    if (vertex.missingEdges.bottom) {
+      const bottomTopIdx = vertices.length / 3;
+      const bottomBottomIdx = bottomTopIdx + 1;
+
+      const px = vertices[topIdx * 3];
+      const py = vertices[topIdx * 3 + 1] - segmentSizeY / 2;
+      const pzTop = vertices[topIdx * 3 + 2];
+
+      vertices.push(px, py, pzTop); // нижняя верхняя
+      colors.push(0.5, 0.5, 0.5);
+      vertices.push(px, py, 0);     // нижняя нижняя
+      colors.push(0.5, 0.5, 0.5);
+
+      // Прямоугольник из 2 треугольников (нормали наружу)
+      indices.push(topIdx, bottomTopIdx, bottomIdx);
+      indices.push(bottomTopIdx, bottomBottomIdx, bottomIdx);
+      wallTriangles += 2;
+    }
+  }
+
+  console.log('Side wall triangles:', wallTriangles);
+
+  // Добавляем плоское дно (Z=0)
+  // Находим выпуклую оболочку нижних точек или просто триангулируем
+  if (edgeVertices.length >= 3) {
+    // Простая триангуляция веером из первой точки
+    const firstBottomIdx = bottomVertexStart;
+
+    for (let i = 1; i < edgeVertices.length - 1; i++) {
+      indices.push(firstBottomIdx, bottomVertexStart + i + 1, bottomVertexStart + i);
+    }
+  }
+
+  console.log('Total vertices:', vertices.length / 3);
+  console.log('Total triangles:', indices.length / 3);
+  console.log('=== CLIPPED GRID GENERATOR FINISHED ===');
+
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  
+
   return geometry;
 }
 
@@ -273,35 +426,35 @@ function generateRectangularGeometry(
   // (это заглушка, реальная реализация будет в meshGenerator)
   const { width: imgWidth, height: imgHeight } = imageData;
   const { resolution, extrusionHeight, baseHeight } = settings;
-  
+
   const vertices: number[] = [];
   const indices: number[] = [];
   const colors: number[] = [];
-  
+
   // Простая прямоугольная сетка 2x2 для fallback
   const segmentsX = 2;
   const segmentsY = 2;
-  
+
   const meshWidth = settings.width;
   const meshHeight = settings.height;
-  
+
   for (let y = 0; y <= segmentsY; y++) {
     for (let x = 0; x <= segmentsX; x++) {
       const px = (x / segmentsX - 0.5) * meshWidth;
       const py = (y / segmentsY - 0.5) * meshHeight;
-      
+
       const imgX = Math.floor((x / segmentsX) * (imgWidth - 1));
       const imgY = Math.floor((y / segmentsY) * (imgHeight - 1));
       const pixelIndex = (imgY * imgWidth + imgX) * 4;
       const grayscale = imageData.data[pixelIndex] / 255;
-      
+
       const pz = baseHeight + grayscale * extrusionHeight;
-      
+
       vertices.push(px, py, pz);
       colors.push(grayscale, grayscale, grayscale);
     }
   }
-  
+
   // Индексы для прямоугольника
   for (let y = 0; y < segmentsY; y++) {
     for (let x = 0; x < segmentsX; x++) {
@@ -309,18 +462,18 @@ function generateRectangularGeometry(
       const b = y * (segmentsX + 1) + (x + 1);
       const c = (y + 1) * (segmentsX + 1) + (x + 1);
       const d = (y + 1) * (segmentsX + 1) + x;
-      
+
       indices.push(a, b, c);
       indices.push(a, c, d);
     }
   }
-  
+
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  
+
   return geometry;
 }
 
@@ -339,12 +492,12 @@ function visualizeBinaryMap(
   canvas.style.border = '1px solid red';
   canvas.style.margin = '5px';
   canvas.title = label;
-  
+
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  
+
   const imageData = ctx.createImageData(width, height);
-  
+
   for (let i = 0; i < binaryMap.length; i++) {
     const value = binaryMap[i] ? 255 : 0;
     imageData.data[i * 4] = value;
@@ -352,20 +505,20 @@ function visualizeBinaryMap(
     imageData.data[i * 4 + 2] = value;
     imageData.data[i * 4 + 3] = 255;
   }
-  
+
   ctx.putImageData(imageData, 0, 0);
-  
+
   // Добавляем на страницу
   const container = getOrCreateDebugContainer();
   const wrapper = document.createElement('div');
   wrapper.style.display = 'inline-block';
   wrapper.style.textAlign = 'center';
-  
+
   const labelEl = document.createElement('div');
   labelEl.textContent = label;
   labelEl.style.fontSize = '10px';
   labelEl.style.marginBottom = '2px';
-  
+
   wrapper.appendChild(labelEl);
   wrapper.appendChild(canvas);
   container.appendChild(wrapper);
@@ -388,10 +541,10 @@ function visualizeBoxGrid(
   canvas.style.border = '1px solid green';
   canvas.style.margin = '5px';
   canvas.title = label;
-  
+
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  
+
   // Рисуем бинарную карту как фон
   const imageData = ctx.createImageData(width, height);
   for (let i = 0; i < binaryMap.length; i++) {
@@ -402,25 +555,25 @@ function visualizeBoxGrid(
     imageData.data[i * 4 + 3] = 255;
   }
   ctx.putImageData(imageData, 0, 0);
-  
+
   // Рисуем активные боксы зелёными прямоугольниками
   ctx.strokeStyle = 'lime';
   ctx.lineWidth = 1;
   for (const { x, y } of activeBoxes) {
     ctx.strokeRect(x * boxSize, y * boxSize, boxSize, boxSize);
   }
-  
+
   // Добавляем на страницу
   const container = getOrCreateDebugContainer();
   const wrapper = document.createElement('div');
   wrapper.style.display = 'inline-block';
   wrapper.style.textAlign = 'center';
-  
+
   const labelEl = document.createElement('div');
   labelEl.textContent = label + ' (' + activeBoxes.length + ' boxes)';
   labelEl.style.fontSize = '10px';
   labelEl.style.marginBottom = '2px';
-  
+
   wrapper.appendChild(labelEl);
   wrapper.appendChild(canvas);
   container.appendChild(wrapper);
@@ -431,7 +584,7 @@ function visualizeBoxGrid(
  */
 function getOrCreateDebugContainer(): HTMLElement {
   let container = document.getElementById('outline-debug-container');
-  
+
   if (!container) {
     container = document.createElement('div');
     container.id = 'outline-debug-container';
@@ -448,7 +601,7 @@ function getOrCreateDebugContainer(): HTMLElement {
     container.style.zIndex = '10000';
     container.style.display = 'flex';
     container.style.gap = '10px';
-    
+
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '×';
     closeBtn.style.position = 'absolute';
@@ -466,7 +619,7 @@ function getOrCreateDebugContainer(): HTMLElement {
     closeBtn.onclick = () => {
       if (container) container.remove();
     };
-    
+
     container.appendChild(closeBtn);
     document.body.appendChild(container);
   } else {
@@ -478,6 +631,6 @@ function getOrCreateDebugContainer(): HTMLElement {
       }
     });
   }
-  
+
   return container;
 }
