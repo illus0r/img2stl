@@ -9,25 +9,26 @@ import {
   DEFAULT_MESH_SETTINGS,
 } from '../types';
 
+interface DebugImages {
+  afterDilation: ImageData | null;
+  afterBlur: ImageData | null;
+}
+
 interface AppState {
-  // Загруженное изображение
-  sourceImage: string | null; // Data URL
+  sourceImage: string | null;
   sourceImageFile: File | null;
-  sourceImageData: ImageData | null; // Исходное изображение для vertex colors
-  imageAspectRatio: number; // width / height
-  
-  // Обработанное изображение
+  sourceImageData: ImageData | null;
+  imageAspectRatio: number;
   processedImageData: ImageData | null;
-  
-  // Настройки
+  debugImages: DebugImages;
   imageSettings: ImageSettings;
   meshSettings: MeshSettings;
 }
 
 interface AppContextType extends AppState {
-  // Actions для изменения state
   setSourceImage: (file: File, dataUrl: string) => void;
   setProcessedImageData: (imageData: ImageData | null) => void;
+  setDebugImages: (images: DebugImages) => void;
   updateImageSettings: (settings: Partial<ImageSettings>) => void;
   updateMeshSettings: (settings: Partial<MeshSettings>) => void;
   resetSettings: () => void;
@@ -41,26 +42,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [sourceImageData, setSourceImageData] = useState<ImageData | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number>(1);
   const [processedImageData, setProcessedImageData] = useState<ImageData | null>(null);
+  const [debugImages, setDebugImages] = useState<DebugImages>({ afterDilation: null, afterBlur: null });
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const [meshSettings, setMeshSettings] = useState<MeshSettings>(DEFAULT_MESH_SETTINGS);
 
   const setSourceImage = useCallback((file: File, dataUrl: string) => {
     setSourceImageFile(file);
     setSourceImageState(dataUrl);
-    
-    // Загружаем изображение чтобы получить aspect ratio и ImageData
+
     const img = new Image();
     img.onload = () => {
       const aspectRatio = img.width / img.height;
       setImageAspectRatio(aspectRatio);
-      
-      // Обновляем height в meshSettings согласно aspect ratio
+
       setMeshSettings(prev => ({
         ...prev,
         height: prev.width / aspectRatio
       }));
-      
-      // Создаём ImageData для vertex colors
+
       const canvas = document.createElement('canvas');
       canvas.width = img.width;
       canvas.height = img.height;
@@ -73,8 +72,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     img.src = dataUrl;
   }, []);
-
-
 
   const updateImageSettings = useCallback((settings: Partial<ImageSettings>) => {
     setImageSettings((prev) => ({ ...prev, ...settings }));
@@ -95,10 +92,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sourceImageData,
     imageAspectRatio,
     processedImageData,
+    debugImages,
     imageSettings,
     meshSettings,
     setSourceImage,
     setProcessedImageData,
+    setDebugImages,
     updateImageSettings,
     updateMeshSettings,
     resetSettings,

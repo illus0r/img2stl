@@ -10,17 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.11.3",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.3",
+    "@mui/material": "^5.15.3",
+    "@react-three/drei": "^9.92.7",
+    "@react-three/fiber": "^8.15.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@react-three/fiber": "^8.15.12",
-    "@react-three/drei": "^9.92.7",
-    "three": "^0.160.0",
-    "@mui/material": "^5.15.3",
-    "@mui/icons-material": "^5.15.3",
-    "@emotion/react": "^11.11.3",
-    "@emotion/styled": "^11.11.0"
+    "three": "^0.160.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.28.6",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^18.3.12",

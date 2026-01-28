@@ -1,43 +1,41 @@
 // @ts-nocheck - TODO: fix R3F types for React
 import { useEffect, useState } from 'react';
 import { useAppContext } from '../../store/useAppContext';
-import { generateStampGeometry } from '../../utils/meshGenerator';
 import { generateOutlineGeometry } from '../../utils/outlineGenerator';
 import type * as THREE from 'three';
 
 const StampMesh = () => {
-  const { processedImageData, sourceImageData, meshSettings } = useAppContext();
+  const { processedImageData, sourceImageData, meshSettings, setDebugImages } = useAppContext();
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
 
   useEffect(() => {
     if (!processedImageData) {
       setGeometry(null);
+      setDebugImages({ afterDilation: null, afterBlur: null });
       return;
     }
 
     try {
-      // Выбираем генератор в зависимости от настройки useOutline
-      const newGeometry = meshSettings.useOutline
-        ? generateOutlineGeometry(
-            processedImageData,
-            sourceImageData,
-            meshSettings,
-            meshSettings.outlineThreshold,
-            meshSettings.outlineOffset
-          )
-        : generateStampGeometry(processedImageData, sourceImageData, meshSettings);
-      
-      setGeometry(newGeometry);
-      
-      // Cleanup старой геометрии
+      const result = generateOutlineGeometry(
+        processedImageData,
+        sourceImageData,
+        meshSettings,
+        meshSettings.outlineThreshold,
+        meshSettings.outlineOffset
+      );
+
+      setGeometry(result.geometry);
+      setDebugImages(result.debugImages);
+
       return () => {
-        newGeometry.dispose();
+        result.geometry.dispose();
       };
     } catch (error) {
       console.error('Ошибка генерации геометрии:', error);
       setGeometry(null);
+      setDebugImages({ afterDilation: null, afterBlur: null });
     }
-  }, [processedImageData, sourceImageData, meshSettings]);
+  }, [processedImageData, sourceImageData, meshSettings, setDebugImages]);
 
   if (!geometry) {
     return null;

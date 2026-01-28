@@ -36,6 +36,9 @@ importers:
         specifier: ^0.160.0
         version: 0.160.1
     devDependencies:
+      '@babel/core':
+        specifier: ^7.28.6
+        version: 7.28.6
       '@eslint/js':
         specifier: ^9.39.1
         version: 9.39.2

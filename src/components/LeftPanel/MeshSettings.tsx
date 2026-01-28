@@ -1,10 +1,10 @@
-import { Box, Typography, Slider, TextField, Button, Divider, Checkbox, FormControlLabel } from '@mui/material';
+import { Box, Typography, Slider, TextField, Button, Divider } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
 import { useAppContext } from '../../store/useAppContext';
 import { useSTLExport } from '../../hooks/useSTLExport';
 
 const MeshSettingsPanel = () => {
-  const { meshSettings, updateMeshSettings, sourceImage, imageAspectRatio } = useAppContext();
+  const { meshSettings, updateMeshSettings, imageAspectRatio } = useAppContext();
   const { exportSTL, canExport } = useSTLExport();
 
   const handleResolutionChange = (_event: Event, value: number | number[]) => {
@@ -28,7 +28,6 @@ const MeshSettingsPanel = () => {
   const handleWidthChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(event.target.value);
     if (!isNaN(value) && value > 0) {
-      // Пересчитываем высоту пропорционально с учётом aspect ratio
       const newHeight = value / imageAspectRatio;
       updateMeshSettings({ width: value, height: newHeight });
     }
@@ -37,14 +36,9 @@ const MeshSettingsPanel = () => {
   const handleHeightChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(event.target.value);
     if (!isNaN(value) && value > 0) {
-      // Пересчитываем ширину пропорционально с учётом aspect ratio
       const newWidth = value * imageAspectRatio;
       updateMeshSettings({ height: value, width: newWidth });
     }
-  };
-
-  const handleUseOutlineChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    updateMeshSettings({ useOutline: event.target.checked });
   };
 
   const handleOutlineThresholdChange = (_event: Event, value: number | number[]) => {
@@ -119,48 +113,33 @@ const MeshSettingsPanel = () => {
 
       <Divider sx={{ my: 1 }} />
 
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={meshSettings.useOutline}
-            onChange={handleUseOutlineChange}
-            size="small"
-          />
-        }
-        label={<Typography variant="body2">Аутлайн по форме</Typography>}
-      />
+      <Box sx={{ mt: 1 }}>
+        <Typography variant="body2" gutterBottom>
+          Порог: {meshSettings.outlineThreshold}
+        </Typography>
+        <Slider
+          value={meshSettings.outlineThreshold}
+          onChange={handleOutlineThresholdChange}
+          min={0}
+          max={255}
+          step={1}
+          size="small"
+        />
+      </Box>
 
-      {meshSettings.useOutline && (
-        <>
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="body2" gutterBottom>
-              Порог: {meshSettings.outlineThreshold}
-            </Typography>
-            <Slider
-              value={meshSettings.outlineThreshold}
-              onChange={handleOutlineThresholdChange}
-              min={0}
-              max={255}
-              step={1}
-              size="small"
-            />
-          </Box>
-
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="body2" gutterBottom>
-              Отступ: {meshSettings.outlineOffset}px
-            </Typography>
-            <Slider
-              value={meshSettings.outlineOffset}
-              onChange={handleOutlineOffsetChange}
-              min={0}
-              max={20}
-              step={1}
-              size="small"
-            />
-          </Box>
-        </>
-      )}
+      <Box sx={{ mt: 1 }}>
+        <Typography variant="body2" gutterBottom>
+          Отступ: {meshSettings.outlineOffset}%
+        </Typography>
+        <Slider
+          value={meshSettings.outlineOffset}
+          onChange={handleOutlineOffsetChange}
+          min={0}
+          max={50}
+          step={0.5}
+          size="small"
+        />
+      </Box>
 
       <Divider sx={{ my: 1 }} />
 

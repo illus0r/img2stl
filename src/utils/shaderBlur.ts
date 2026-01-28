@@ -136,7 +136,7 @@ function createGaussianBlurMaterial(
 
       void main() {
         vec4 sum = vec4(0.0);
-        
+
         // 9-tap Gaussian kernel
         sum += texture2D(tDiffuse, vUv - direction * 4.0) * 0.0162162162;
         sum += texture2D(tDiffuse, vUv - direction * 3.0) * 0.0540540541;
@@ -147,7 +147,7 @@ function createGaussianBlurMaterial(
         sum += texture2D(tDiffuse, vUv + direction * 2.0) * 0.1216216216;
         sum += texture2D(tDiffuse, vUv + direction * 3.0) * 0.0540540541;
         sum += texture2D(tDiffuse, vUv + direction * 4.0) * 0.0162162162;
-        
+
         gl_FragColor = sum;
       }
     `,
@@ -186,25 +186,25 @@ function createUniformBlurMaterial(
         vec2 pixelSize = 1.0 / resolution;
         vec4 sum = vec4(0.0);
         float count = 0.0;
-        
+
         int iRadius = int(ceil(radius));
-        
+
         for (int y = -50; y <= 50; y++) {
           if (abs(y) > iRadius) continue;
-          
+
           for (int x = -50; x <= 50; x++) {
             if (abs(x) > iRadius) continue;
-            
+
             // Проверяем что точка внутри круглой маски
             float dist = sqrt(float(x * x + y * y));
             if (dist > radius) continue;
-            
+
             vec2 offset = vec2(float(x), float(y)) * pixelSize;
             sum += texture2D(tDiffuse, vUv + offset);
             count += 1.0;
           }
         }
-        
+
         gl_FragColor = sum / count;
       }
     `,
@@ -241,7 +241,7 @@ export function applyCubicBezierShader(
   curve: [number, number, number, number]
 ): ImageData {
   const [x1, y1, x2, y2] = curve;
-  
+
   // Если кривая линейная (0,0,1,1) - пропускаем обработку
   if (x1 === 0 && y1 === 0 && x2 === 1 && y2 === 1) {
     return imageData;
@@ -282,6 +282,122 @@ export function applyCubicBezierShader(
 }
 
 /**
+ * Применяет дилатацию через separable проходы (horizontal + vertical max)
+ */
+export function applyDilationShader(
+  imageData: ImageData,
+  radius: number,
+  threshold: number = 127
+): ImageData {
+  if (radius <= 0) return imageData;
+
+  const { width, height } = imageData;
+  const iRadius = Math.ceil(radius);
+
+  console.log('Dilation: radius =', radius, 'iRadius =', iRadius);
+
+  const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
+  renderer.setSize(width, height);
+
+  const texture = new THREE.DataTexture(
+    imageData.data,
+    width,
+    height,
+    THREE.RGBAFormat
+  );
+  texture.needsUpdate = true;
+
+  // Horizontal pass
+  const hTarget = new THREE.WebGLRenderTarget(width, height, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    format: THREE.RGBAFormat,
+  });
+
+  const hMaterial = createDilationPassMaterial(texture, iRadius, width, height, threshold, true);
+  renderPass(renderer, hMaterial, hTarget);
+
+  // Vertical pass
+  const vTarget = new THREE.WebGLRenderTarget(width, height, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    format: THREE.RGBAFormat,
+  });
+
+  const vMaterial = createDilationPassMaterial(hTarget.texture, iRadius, width, height, threshold, false);
+  renderPass(renderer, vMaterial, vTarget);
+
+  const buffer = new Uint8Array(width * height * 4);
+  renderer.readRenderTargetPixels(vTarget, 0, 0, width, height, buffer);
+
+  renderer.dispose();
+  texture.dispose();
+  hTarget.dispose();
+  vTarget.dispose();
+  hMaterial.dispose();
+  vMaterial.dispose();
+
+  return new ImageData(new Uint8ClampedArray(buffer), width, height);
+}
+
+/**
+ * Создаёт материал для одного прохода дилатации (horizontal или vertical)
+ */
+function createDilationPassMaterial(
+  texture: THREE.Texture,
+  radius: number,
+  width: number,
+  height: number,
+  threshold: number,
+  horizontal: boolean
+): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      tDiffuse: { value: texture },
+      radius: { value: Math.floor(radius) },
+      pixelSize: { value: horizontal ? 1.0 / width : 1.0 / height },
+      threshold: { value: threshold / 255.0 },
+      horizontal: { value: horizontal ? 1.0 : 0.0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D tDiffuse;
+      uniform int radius;
+      uniform float pixelSize;
+      uniform float threshold;
+      uniform float horizontal;
+      varying vec2 vUv;
+
+      void main() {
+        float maxVal = texture2D(tDiffuse, vUv).r;
+
+        for (int i = 1; i <= 100; i++) {
+          if (i > radius) break;
+
+          vec2 offset = horizontal > 0.5
+            ? vec2(float(i) * pixelSize, 0.0)
+            : vec2(0.0, float(i) * pixelSize);
+
+          float s1 = texture2D(tDiffuse, vUv + offset).r;
+          float s2 = texture2D(tDiffuse, vUv - offset).r;
+
+          if (s1 > threshold) maxVal = max(maxVal, s1);
+          if (s2 > threshold) maxVal = max(maxVal, s2);
+        }
+
+        gl_FragColor = vec4(maxVal, maxVal, maxVal, 1.0);
+      }
+    `,
+  });
+}
+
+/**
  * Создаёт материал для Cubic Bezier transfer function
  */
 function createCubicBezierMaterial(
@@ -316,19 +432,19 @@ function createCubicBezierMaterial(
         float mt3 = mt2 * mt;
         float t2 = t * t;
         float t3 = t2 * t;
-        
+
         // B(t) = (1-t)³*0 + 3(1-t)²t*y1 + 3(1-t)t²*y2 + t³*1
         return 3.0 * mt2 * t * y1 + 3.0 * mt * t2 * y2 + t3;
       }
 
       void main() {
         vec4 color = texture2D(tDiffuse, vUv);
-        
+
         // Применяем bezier к каждому каналу
         float t = color.r; // Grayscale, все каналы одинаковые
         float transformed = cubicBezier(t, bezier.y, bezier.w);
         transformed = clamp(transformed, 0.0, 1.0);
-        
+
         gl_FragColor = vec4(transformed, transformed, transformed, color.a);
       }
     `,
