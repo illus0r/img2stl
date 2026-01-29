@@ -19,18 +19,18 @@ export interface MeshSettings {
 
 // Дефолтные значения
 export const DEFAULT_IMAGE_SETTINGS: ImageSettings = {
-  invert: true,
-  gaussianBlur: 0,
-  uniformBlur: 0,
+  invert: false,
+  gaussianBlur: 1.1,
+  uniformBlur: 0.0,
   bezierCurve: [0, 0, 1, 1],
 };
 
 export const DEFAULT_MESH_SETTINGS: MeshSettings = {
-  resolution: 100,
+  resolution: 200,
   extrusionHeight: 4,
   baseHeight: 5,
   width: 50,
   height: 50,
-  outlineThreshold: 127,
-  outlineOffset: 2, // 2%
+  outlineThreshold: 29,
+  outlineOffset: 1, // 1%
 };

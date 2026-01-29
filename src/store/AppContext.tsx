@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback } from 'react';
+import React, { createContext, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type {
   ImageSettings,
@@ -45,6 +45,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [debugImages, setDebugImages] = useState<DebugImages>({ afterDilation: null, afterBlur: null });
   const [imageSettings, setImageSettings] = useState<ImageSettings>(DEFAULT_IMAGE_SETTINGS);
   const [meshSettings, setMeshSettings] = useState<MeshSettings>(DEFAULT_MESH_SETTINGS);
+
+  // Load default image on app initialization
+  useEffect(() => {
+    const loadDefaultImage = async () => {
+      try {
+        const response = await fetch('/default.jpg');
+        const blob = await response.blob();
+        const file = new File([blob], 'default.jpg', { type: 'image/jpeg' });
+        const dataUrl = URL.createObjectURL(blob);
+        setSourceImage(file, dataUrl);
+      } catch (error) {
+        console.error('Failed to load default image:', error);
+      }
+    };
+
+    if (!sourceImage) {
+      loadDefaultImage();
+    }
+  }, [sourceImage]);
 
   const setSourceImage = useCallback((file: File, dataUrl: string) => {
     setSourceImageFile(file);
